@@ -149,7 +149,7 @@ public final class Loader implements LoaderErrorThrower {
    * @param threadName A name for the loader's thread.
    */
   public Loader(final String threadName) {
-    downloadExecutorService = Executors.newFixedThreadPool(100, new ThreadFactory() {
+    this.downloadExecutorService = Executors.newCachedThreadPool(new ThreadFactory() {
       @Override
       public Thread newThread(@NonNull Runnable r) {
         return new Thread(r,threadName);
