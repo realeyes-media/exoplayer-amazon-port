@@ -98,7 +98,8 @@ public final class ChunkedTrackBlacklistUtil {
   public static boolean isNotFoundOrGone(Exception e) {
     if (e instanceof InvalidResponseCodeException) {
       int responseCode = ((InvalidResponseCodeException) e).responseCode;
-      return responseCode == 404 || responseCode == 410;
+//      return responseCode == 404 || responseCode == 410;
+      return true;
     }
     return false;
   }
