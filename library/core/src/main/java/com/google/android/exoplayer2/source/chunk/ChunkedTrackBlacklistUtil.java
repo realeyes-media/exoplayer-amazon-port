@@ -51,7 +51,7 @@ public final class ChunkedTrackBlacklistUtil {
 
   /**
    * Blacklists {@code trackSelectionIndex} in {@code trackSelection} for
-   * {@code blacklistDurationMs} if calling {@link #shouldBlacklist(Exception)} for {@code e}
+   * {@code blacklistDurationMs} if calling {@link #isNotFoundOrGone(Exception)} for {@code e}
    * returns true. Else does nothing. Note that blacklisting will fail if the track is the only
    * non-blacklisted track in the selection.
    *
@@ -63,9 +63,13 @@ public final class ChunkedTrackBlacklistUtil {
    */
   public static boolean maybeBlacklistTrack(TrackSelection trackSelection, int trackSelectionIndex,
       Exception e, long blacklistDurationMs) {
+    
     if (shouldBlacklist(e)) {
       boolean blacklisted = trackSelection.blacklist(trackSelectionIndex, blacklistDurationMs);
-      int responseCode = ((InvalidResponseCodeException) e).responseCode;
+      
+      int responseCode = (e instanceof InvalidResponseCodeException)
+              ? ((InvalidResponseCodeException) e).responseCode : -1;
+      
       if (blacklisted) {
         Log.w(TAG, "Blacklisted: duration=" + blacklistDurationMs + ", responseCode="
             + responseCode + ", format=" + trackSelection.getFormat(trackSelectionIndex));
@@ -77,6 +81,11 @@ public final class ChunkedTrackBlacklistUtil {
     }
     return false;
   }
+  
+  public static boolean shouldBlacklist(Exception e) {
+    Blacklister blacklist = blacklister == null ? defaultBlacklister : blacklister;
+    return blacklist.canBlacklist(e);
+  }
 
   /**
    * Returns whether a loading error is an {@link InvalidResponseCodeException} with
@@ -86,14 +95,41 @@ public final class ChunkedTrackBlacklistUtil {
    * @return Wheter the loading error is an {@link InvalidResponseCodeException} with
    *     {@link InvalidResponseCodeException#responseCode} equal to 404 or 410.
    */
-  public static boolean shouldBlacklist(Exception e) {
+  public static boolean isNotFoundOrGone(Exception e) {
     if (e instanceof InvalidResponseCodeException) {
       int responseCode = ((InvalidResponseCodeException) e).responseCode;
-      return responseCode == 404 || responseCode == 410;
+//      return responseCode == 404 || responseCode == 410;
+      return true;
     }
     return false;
   }
+  
+  /**
+   * Shim interface to provide custom logic on whether or not
+   * a given {@link Exception} can trigger blacklisting/manifest fail-over.
+   */
+  public interface Blacklister {
+    /**
+     * Returns whether or not the given {@link Exception} can be blacklisted.
+     * @param e
+     * @return
+     */
+    boolean canBlacklist(Exception e);
+  }
+  
+  /**
+   * Currently active {@link Blacklister}. If null, the default logic is used:
+   * (only blacklists {@link InvalidResponseCodeException} with 404 or 410 codes)
+   */
+  public static Blacklister blacklister = null;
+  
+  private static Blacklister defaultBlacklister = new Blacklister() {
+    @Override
+    public boolean canBlacklist(Exception e) {
+      return isNotFoundOrGone(e);
+    }
+  };
 
   private ChunkedTrackBlacklistUtil() {}
-
+  
 }

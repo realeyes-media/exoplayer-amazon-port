@@ -363,7 +363,7 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
     String encryptionKeyUri = null;
     String encryptionIV = null;
     DrmInitData drmInitData = null;
-
+    List<String> segmentTags = new ArrayList<>();
     String line;
     while (iterator.hasNext()) {
       line = iterator.next();
@@ -371,7 +371,11 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
       if (line.startsWith(TAG_PREFIX)) {
         // We expose all tags through the playlist.
         tags.add(line);
+        // And through individual segments
+        // The first segment gets all of the header tags.
+        segmentTags.add(line);
       }
+      
 
       if (line.startsWith(TAG_PLAYLIST_TYPE)) {
         String playlistTypeString = parseStringAttr(line, REGEX_PLAYLIST_TYPE);
@@ -392,7 +396,8 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
             segmentByteRangeOffset = Long.parseLong(splitByteRange[1]);
           }
         }
-        initializationSegment = new Segment(uri, segmentByteRangeOffset, segmentByteRangeLength);
+        initializationSegment = new Segment(uri, segmentByteRangeOffset, segmentByteRangeLength, segmentTags);
+        // The initialization segment, if present, shares the header tags with the first segment.
         segmentByteRangeOffset = 0;
         segmentByteRangeLength = C.LENGTH_UNSET;
       } else if (line.startsWith(TAG_TARGET_DURATION)) {
@@ -480,7 +485,11 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
                 segmentEncryptionIV,
                 segmentByteRangeOffset,
                 segmentByteRangeLength,
-                hasGapTag));
+                hasGapTag,
+                segmentTags));
+        
+        // reset tags being tracked per segment
+        segmentTags = new ArrayList<>();
         segmentStartTimeUs += segmentDurationUs;
         segmentDurationUs = 0;
         if (segmentByteRangeLength != C.LENGTH_UNSET) {
