@@ -24,6 +24,7 @@ import com.google.android.exoplayer2.upstream.BandwidthMeter;
 import com.google.android.exoplayer2.util.Clock;
 import com.google.android.exoplayer2.util.Util;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * A bandwidth based adaptive {@link TrackSelection}, whose selected track is updated to be the one
@@ -167,6 +168,7 @@ public class AdaptiveTrackSelection extends BaseTrackSelection {
   private final float bufferedFractionToLiveEdgeForQualityIncrease;
   private final long minTimeBetweenBufferReevaluationMs;
   private final Clock clock;
+  private final AtomicLong lastTrackSelectionCheckTime = new AtomicLong(0);
 
   private float playbackSpeed;
   private int selectedIndex;
@@ -264,6 +266,12 @@ public class AdaptiveTrackSelection extends BaseTrackSelection {
   public void updateSelectedTrack(long playbackPositionUs, long bufferedDurationUs,
       long availableDurationUs) {
     long nowMs = clock.elapsedRealtime();
+  
+    if (nowMs - lastTrackSelectionCheckTime.get() < 2000) {
+      return;
+    }
+  
+    lastTrackSelectionCheckTime.set(nowMs);
     // Stash the current selection, then make a new one.
     int currentSelectedIndex = selectedIndex;
     selectedIndex = determineIdealSelectedIndex(nowMs);
