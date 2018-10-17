@@ -71,7 +71,13 @@ public final class HlsMediaPlaylist extends HlsPlaylist {
      * no byte range is specified.
      */
     public final long byterangeLength;
-
+  
+    /**
+     * The metadata tags associated with this segments, read from the manifest.
+     * This can be used to look up custom metadata associated with segments.
+     */
+    public final List<String> tags;
+    
     /** Whether the segment is tagged with #EXT-X-GAP. */
     public final boolean hasGapTag;
 
@@ -79,9 +85,10 @@ public final class HlsMediaPlaylist extends HlsPlaylist {
      * @param uri See {@link #url}.
      * @param byterangeOffset See {@link #byterangeOffset}.
      * @param byterangeLength See {@link #byterangeLength}.
+     * @param tags See {@link #tags}.
      */
-    public Segment(String uri, long byterangeOffset, long byterangeLength) {
-      this(uri, null, 0, -1, C.TIME_UNSET, null, null, byterangeOffset, byterangeLength, false);
+    public Segment(String uri, long byterangeOffset, long byterangeLength, List<String> tags) {
+      this(uri, null, 0, -1, C.TIME_UNSET, null, null, byterangeOffset, byterangeLength, false, tags);
     }
 
     /**
@@ -95,6 +102,7 @@ public final class HlsMediaPlaylist extends HlsPlaylist {
      * @param byterangeOffset See {@link #byterangeOffset}.
      * @param byterangeLength See {@link #byterangeLength}.
      * @param hasGapTag See {@link #hasGapTag}.
+     * @param tags See {@link #tags}.
      */
     public Segment(
         String url,
@@ -106,7 +114,8 @@ public final class HlsMediaPlaylist extends HlsPlaylist {
         String encryptionIV,
         long byterangeOffset,
         long byterangeLength,
-        boolean hasGapTag) {
+        boolean hasGapTag,
+        List<String> tags) {
       this.url = url;
       this.initializationSegment = initializationSegment;
       this.durationUs = durationUs;
@@ -117,6 +126,7 @@ public final class HlsMediaPlaylist extends HlsPlaylist {
       this.byterangeOffset = byterangeOffset;
       this.byterangeLength = byterangeLength;
       this.hasGapTag = hasGapTag;
+      this.tags = tags;
     }
 
     @Override
