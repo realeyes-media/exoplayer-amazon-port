@@ -39,18 +39,13 @@ public final class DrmInitData implements Comparator<SchemeData>, Parcelable {
    * <p>The result is generated as follows.
    *
    * <ol>
-   *   <li>
-   *     Include all {@link SchemeData}s from {@code manifestData} where {@link
-   *     SchemeData#hasData()} is true.
-   *   </li>
-   *   <li>
-   *     Include all {@link SchemeData}s in {@code mediaData} where {@link SchemeData#hasData()} is
-   *     true and for which we did not include an entry from the manifest targeting the same UUID.
-   *   </li>
-   *   <li>
-   *     If available, the scheme type from the manifest is used. If not, the scheme type from the
-   *     media is used.
-   *   </li>
+   *   <li>Include all {@link SchemeData}s from {@code manifestData} where {@link
+   *       SchemeData#hasData()} is true.
+   *   <li>Include all {@link SchemeData}s in {@code mediaData} where {@link SchemeData#hasData()}
+   *       is true and for which we did not include an entry from the manifest targeting the same
+   *       UUID.
+   *   <li>If available, the scheme type from the manifest is used. If not, the scheme type from the
+   *       media is used.
    * </ol>
    *
    * @param manifestData DRM session acquisition data obtained from the manifest.
@@ -200,7 +195,7 @@ public final class DrmInitData implements Comparator<SchemeData>, Parcelable {
   }
 
   @Override
-  public boolean equals(Object obj) {
+  public boolean equals(@Nullable Object obj) {
     if (this == obj) {
       return true;
     }
@@ -271,9 +266,9 @@ public final class DrmInitData implements Comparator<SchemeData>, Parcelable {
      * applies to all schemes).
      */
     private final UUID uuid;
-    /**
-     * The mimeType of {@link #data}.
-     */
+    /** The URL of the server to which license requests should be made. May be null if unknown. */
+    public final @Nullable String licenseServerUrl;
+    /** The mimeType of {@link #data}. */
     public final String mimeType;
     /**
      * The initialization data. May be null for scheme support checks only.
@@ -302,7 +297,25 @@ public final class DrmInitData implements Comparator<SchemeData>, Parcelable {
      * @param requiresSecureDecryption See {@link #requiresSecureDecryption}.
      */
     public SchemeData(UUID uuid, String mimeType, byte[] data, boolean requiresSecureDecryption) {
+      this(uuid, /* licenseServerUrl= */ null, mimeType, data, requiresSecureDecryption);
+    }
+
+    /**
+     * @param uuid The {@link UUID} of the DRM scheme, or {@link C#UUID_NIL} if the data is
+     *     universal (i.e. applies to all schemes).
+     * @param licenseServerUrl See {@link #licenseServerUrl}.
+     * @param mimeType See {@link #mimeType}.
+     * @param data See {@link #data}.
+     * @param requiresSecureDecryption See {@link #requiresSecureDecryption}.
+     */
+    public SchemeData(
+        UUID uuid,
+        @Nullable String licenseServerUrl,
+        String mimeType,
+        byte[] data,
+        boolean requiresSecureDecryption) {
       this.uuid = Assertions.checkNotNull(uuid);
+      this.licenseServerUrl = licenseServerUrl;
       this.mimeType = Assertions.checkNotNull(mimeType);
       this.data = data;
       this.requiresSecureDecryption = requiresSecureDecryption;
@@ -310,6 +323,7 @@ public final class DrmInitData implements Comparator<SchemeData>, Parcelable {
 
     /* package */ SchemeData(Parcel in) {
       uuid = new UUID(in.readLong(), in.readLong());
+      licenseServerUrl = in.readString();
       mimeType = in.readString();
       data = in.createByteArray();
       requiresSecureDecryption = in.readByte() != 0;
@@ -343,7 +357,7 @@ public final class DrmInitData implements Comparator<SchemeData>, Parcelable {
     }
 
     @Override
-    public boolean equals(Object obj) {
+    public boolean equals(@Nullable Object obj) {
       if (!(obj instanceof SchemeData)) {
         return false;
       }
@@ -351,7 +365,9 @@ public final class DrmInitData implements Comparator<SchemeData>, Parcelable {
         return true;
       }
       SchemeData other = (SchemeData) obj;
-      return mimeType.equals(other.mimeType) && Util.areEqual(uuid, other.uuid)
+      return Util.areEqual(licenseServerUrl, other.licenseServerUrl)
+          && Util.areEqual(mimeType, other.mimeType)
+          && Util.areEqual(uuid, other.uuid)
           && Arrays.equals(data, other.data);
     }
 
@@ -359,6 +375,7 @@ public final class DrmInitData implements Comparator<SchemeData>, Parcelable {
     public int hashCode() {
       if (hashCode == 0) {
         int result = uuid.hashCode();
+        result = 31 * result + (licenseServerUrl == null ? 0 : licenseServerUrl.hashCode());
         result = 31 * result + mimeType.hashCode();
         result = 31 * result + Arrays.hashCode(data);
         hashCode = result;
@@ -377,6 +394,7 @@ public final class DrmInitData implements Comparator<SchemeData>, Parcelable {
     public void writeToParcel(Parcel dest, int flags) {
       dest.writeLong(uuid.getMostSignificantBits());
       dest.writeLong(uuid.getLeastSignificantBits());
+      dest.writeString(licenseServerUrl);
       dest.writeString(mimeType);
       dest.writeByteArray(data);
       dest.writeByte((byte) (requiresSecureDecryption ? 1 : 0));

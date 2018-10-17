@@ -191,7 +191,8 @@ public interface Player {
      * @param manifest The latest manifest. May be null.
      * @param reason The {@link TimelineChangeReason} responsible for this timeline change.
      */
-    void onTimelineChanged(Timeline timeline, Object manifest, @TimelineChangeReason int reason);
+    void onTimelineChanged(
+        Timeline timeline, @Nullable Object manifest, @TimelineChangeReason int reason);
 
     /**
      * Called when the available or selected tracks change.
@@ -281,8 +282,8 @@ public interface Player {
   abstract class DefaultEventListener implements EventListener {
 
     @Override
-    public void onTimelineChanged(Timeline timeline, Object manifest,
-        @TimelineChangeReason int reason) {
+    public void onTimelineChanged(
+        Timeline timeline, @Nullable Object manifest, @TimelineChangeReason int reason) {
       // Call deprecated version. Otherwise, do nothing.
       onTimelineChanged(timeline, manifest);
     }
@@ -337,7 +338,7 @@ public interface Player {
      *     instead.
      */
     @Deprecated
-    public void onTimelineChanged(Timeline timeline, Object manifest) {
+    public void onTimelineChanged(Timeline timeline, @Nullable Object manifest) {
       // Do nothing.
     }
 
@@ -458,6 +459,17 @@ public interface Player {
    * @return One of the {@code STATE} constants defined in this interface.
    */
   int getPlaybackState();
+
+  /**
+   * Returns the error that caused playback to fail. This is the same error that will have been
+   * reported via {@link Player.EventListener#onPlayerError(ExoPlaybackException)} at the time of
+   * failure. It can be queried using this method until {@code stop(true)} is called or the player
+   * is re-prepared.
+   *
+   * @return The error, or {@code null}.
+   */
+  @Nullable
+  ExoPlaybackException getPlaybackError();
 
   /**
    * Sets whether playback should proceed when {@link #getPlaybackState()} == {@link #STATE_READY}.
@@ -654,6 +666,12 @@ public interface Player {
    * currently being played is the first window.
    */
   int getPreviousWindowIndex();
+
+  /**
+   * Returns the tag of the currently playing window in the timeline. May be null if no tag is set
+   * or the timeline is not yet available.
+   */
+  @Nullable Object getCurrentTag();
 
   /**
    * Returns the duration of the current window in milliseconds, or {@link C#TIME_UNSET} if the

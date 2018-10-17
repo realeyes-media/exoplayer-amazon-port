@@ -53,7 +53,7 @@ public final class LeanbackPlayerAdapter extends PlayerAdapter {
 
   private @Nullable PlaybackPreparer playbackPreparer;
   private ControlDispatcher controlDispatcher;
-  private ErrorMessageProvider<? super ExoPlaybackException> errorMessageProvider;
+  private @Nullable ErrorMessageProvider<? super ExoPlaybackException> errorMessageProvider;
   private SurfaceHolderGlueHost surfaceHolderGlueHost;
   private boolean hasSurface;
   private boolean lastNotifiedPreparedState;
@@ -110,7 +110,7 @@ public final class LeanbackPlayerAdapter extends PlayerAdapter {
    * @param errorMessageProvider The {@link ErrorMessageProvider}.
    */
   public void setErrorMessageProvider(
-      ErrorMessageProvider<? super ExoPlaybackException> errorMessageProvider) {
+      @Nullable ErrorMessageProvider<? super ExoPlaybackException> errorMessageProvider) {
     this.errorMessageProvider = errorMessageProvider;
   }
 
@@ -281,8 +281,8 @@ public final class LeanbackPlayerAdapter extends PlayerAdapter {
     }
 
     @Override
-    public void onTimelineChanged(Timeline timeline, Object manifest,
-        @TimelineChangeReason int reason) {
+    public void onTimelineChanged(
+        Timeline timeline, @Nullable Object manifest, @TimelineChangeReason int reason) {
       Callback callback = getCallback();
       callback.onDurationChanged(LeanbackPlayerAdapter.this);
       callback.onCurrentPositionChanged(LeanbackPlayerAdapter.this);

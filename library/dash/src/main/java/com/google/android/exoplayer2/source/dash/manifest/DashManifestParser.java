@@ -112,7 +112,7 @@ public class DashManifestParser extends DefaultHandler
     long durationMs = parseDuration(xpp, "mediaPresentationDuration", C.TIME_UNSET);
     long minBufferTimeMs = parseDuration(xpp, "minBufferTime", C.TIME_UNSET);
     String typeString = xpp.getAttributeValue(null, "type");
-    boolean dynamic = typeString != null && typeString.equals("dynamic");
+    boolean dynamic = typeString != null && "dynamic".equals(typeString);
     long minUpdateTimeMs = dynamic ? parseDuration(xpp, "minimumUpdatePeriod", C.TIME_UNSET)
         : C.TIME_UNSET;
     long timeShiftBufferDepthMs = dynamic
@@ -355,6 +355,7 @@ public class DashManifestParser extends DefaultHandler
   protected Pair<String, SchemeData> parseContentProtection(XmlPullParser xpp)
       throws XmlPullParserException, IOException {
     String schemeType = null;
+    String licenseServerUrl = null;
     byte[] data = null;
     UUID uuid = null;
     boolean requiresSecureDecoder = false;
@@ -364,7 +365,7 @@ public class DashManifestParser extends DefaultHandler
       switch (Util.toLowerInvariant(schemeIdUri)) {
         case "urn:mpeg:dash:mp4protection:2011":
           schemeType = xpp.getAttributeValue(null, "value");
-          String defaultKid = xpp.getAttributeValue(null, "cenc:default_KID");
+          String defaultKid = XmlPullParserUtil.getAttributeValueIgnorePrefix(xpp, "default_KID");
           if (!TextUtils.isEmpty(defaultKid)
               && !"00000000-0000-0000-0000-000000000000".equals(defaultKid)) {
             String[] defaultKidStrings = defaultKid.split("\\s+");
@@ -389,11 +390,14 @@ public class DashManifestParser extends DefaultHandler
 
     do {
       xpp.next();
-      if (XmlPullParserUtil.isStartTag(xpp, "widevine:license")) {
+      if (XmlPullParserUtil.isStartTag(xpp, "ms:laurl")) {
+        licenseServerUrl = xpp.getAttributeValue(null, "licenseUrl");
+      } else if (XmlPullParserUtil.isStartTag(xpp, "widevine:license")) {
         String robustnessLevel = xpp.getAttributeValue(null, "robustness_level");
         requiresSecureDecoder = robustnessLevel != null && robustnessLevel.startsWith("HW");
       } else if (data == null) {
-        if (XmlPullParserUtil.isStartTag(xpp, "cenc:pssh") && xpp.next() == XmlPullParser.TEXT) {
+        if (XmlPullParserUtil.isStartTagIgnorePrefix(xpp, "pssh")
+            && xpp.next() == XmlPullParser.TEXT) {
           // The cenc:pssh element is defined in 23001-7:2015.
           data = Base64.decode(xpp.getText(), Base64.DEFAULT);
           uuid = PsshAtomUtil.parseUuid(data);
@@ -409,8 +413,11 @@ public class DashManifestParser extends DefaultHandler
         }
       }
     } while (!XmlPullParserUtil.isEndTag(xpp, "ContentProtection"));
-    SchemeData schemeData = uuid != null
-        ? new SchemeData(uuid, MimeTypes.VIDEO_MP4, data, requiresSecureDecoder) : null;
+    SchemeData schemeData =
+        uuid != null
+            ? new SchemeData(
+                uuid, licenseServerUrl, MimeTypes.VIDEO_MP4, data, requiresSecureDecoder)
+            : null;
     return Pair.create(schemeType, schemeData);
   }
 
@@ -732,19 +739,23 @@ public class DashManifestParser extends DefaultHandler
 
   /**
    * Parses a single Event node in the manifest.
-   * <p>
+   *
    * @param xpp The current xml parser.
    * @param schemeIdUri The schemeIdUri of the parent EventStream.
    * @param value The schemeIdUri of the parent EventStream.
    * @param timescale The timescale of the parent EventStream.
-   * @param scratchOutputStream A {@link ByteArrayOutputStream} that's used when parsing event
+   * @param scratchOutputStream A {@link ByteArrayOutputStream} that is used when parsing event
    *     objects.
    * @return The {@link EventMessage} parsed from this EventStream node.
    * @throws XmlPullParserException If there is any error parsing this node.
    * @throws IOException If there is any error reading from the underlying input stream.
    */
-  protected EventMessage parseEvent(XmlPullParser xpp, String schemeIdUri, String value,
-      long timescale, ByteArrayOutputStream scratchOutputStream)
+  protected EventMessage parseEvent(
+      XmlPullParser xpp,
+      String schemeIdUri,
+      String value,
+      long timescale,
+      ByteArrayOutputStream scratchOutputStream)
       throws IOException, XmlPullParserException {
     long id = parseLong(xpp, "id", 0);
     long duration = parseLong(xpp, "duration", C.TIME_UNSET);

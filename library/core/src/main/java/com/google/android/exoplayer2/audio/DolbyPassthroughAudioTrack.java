@@ -247,13 +247,9 @@ public final class DolbyPassthroughAudioTrack extends android.media.AudioTrack {
   @Override
   public int write(byte[] audioData, int offsetInBytes, int sizeInBytes) {
     if (getPlayState() != android.media.AudioTrack.PLAYSTATE_PLAYING ) {
-      log.w("not in play state..not writing buffer now...");
       return 0;
     }
     if (!pendingWriteSem.tryAcquire()) {
-      if (log.allowVerbose()) {
-        log.v("pending writes... not writing buffer now");
-      }
       return 0;
     }
     if (audioBuffer[nextBufferIndex] == null ||
@@ -268,9 +264,7 @@ public final class DolbyPassthroughAudioTrack extends android.media.AudioTrack {
     Message msg = trackHandler.obtainMessage(MSG_WRITE_TO_TRACK,
             sizeInBytes,
             nextBufferIndex);
-    if (log.allowVerbose()) {
-      log.v("Sending buffer to DirectTrack handler thread");
-    }
+
     trackHandler.sendMessage(msg);
     nextBufferIndex = ((nextBufferIndex + 1) % BUFFER_COUNT);
 

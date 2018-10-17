@@ -22,9 +22,11 @@ import android.media.MediaCodecInfo.AudioCapabilities;
 import android.media.MediaCodecInfo.CodecCapabilities;
 import android.media.MediaCodecInfo.CodecProfileLevel;
 import android.media.MediaCodecInfo.VideoCapabilities;
+import android.support.annotation.Nullable;
 import android.util.Log;
 import android.util.Pair;
 import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.util.AmazonQuirks;
 import com.google.android.exoplayer2.util.Assertions;
 import com.google.android.exoplayer2.util.MimeTypes;
 import com.google.android.exoplayer2.util.Util;
@@ -38,12 +40,27 @@ public final class MediaCodecInfo {
   public static final String TAG = "MediaCodecInfo";
 
   /**
+   * The value returned by {@link #getMaxSupportedInstances()} if the upper bound on the maximum
+   * number of supported instances is unknown.
+   */
+  public static final int MAX_SUPPORTED_INSTANCES_UNKNOWN = -1;
+
+  /**
    * The name of the decoder.
    * <p>
    * May be passed to {@link MediaCodec#createByCodecName(String)} to create an instance of the
    * decoder.
    */
   public final String name;
+
+  /** The MIME type handled by the codec, or {@code null} if this is a passthrough codec. */
+  public final @Nullable String mimeType;
+
+  /**
+   * The capabilities of the decoder, like the profiles/levels it supports, or {@code null} if this
+   * is a passthrough codec.
+   */
+  public final @Nullable CodecCapabilities capabilities;
 
   /**
    * Whether the decoder supports seamless resolution switches.
@@ -69,8 +86,8 @@ public final class MediaCodecInfo {
    */
   public final boolean secure;
 
-  private final String mimeType;
-  private final CodecCapabilities capabilities;
+  /** Whether this instance describes a passthrough codec. */
+  public final boolean passthrough;
 
   /**
    * Creates an instance representing an audio passthrough decoder.
@@ -79,7 +96,13 @@ public final class MediaCodecInfo {
    * @return The created instance.
    */
   public static MediaCodecInfo newPassthroughInstance(String name) {
-    return new MediaCodecInfo(name, null, null, false, false);
+    return new MediaCodecInfo(
+        name,
+        /* mimeType= */ null,
+        /* capabilities= */ null,
+        /* passthrough= */ true,
+        /* forceDisableAdaptive= */ false,
+        /* forceSecure= */ false);
   }
 
   /**
@@ -92,7 +115,13 @@ public final class MediaCodecInfo {
    */
   public static MediaCodecInfo newInstance(String name, String mimeType,
       CodecCapabilities capabilities) {
-    return new MediaCodecInfo(name, mimeType, capabilities, false, false);
+    return new MediaCodecInfo(
+        name,
+        mimeType,
+        capabilities,
+        /* passthrough= */ false,
+        /* forceDisableAdaptive= */ false,
+        /* forceSecure= */ false);
   }
 
   /**
@@ -105,16 +134,27 @@ public final class MediaCodecInfo {
    * @param forceSecure Whether {@link #secure} should be forced to {@code true}.
    * @return The created instance.
    */
-  public static MediaCodecInfo newInstance(String name, String mimeType,
-      CodecCapabilities capabilities, boolean forceDisableAdaptive, boolean forceSecure) {
-    return new MediaCodecInfo(name, mimeType, capabilities, forceDisableAdaptive, forceSecure);
+  public static MediaCodecInfo newInstance(
+      String name,
+      String mimeType,
+      CodecCapabilities capabilities,
+      boolean forceDisableAdaptive,
+      boolean forceSecure) {
+    return new MediaCodecInfo(
+        name, mimeType, capabilities, /* passthrough= */ false, forceDisableAdaptive, forceSecure);
   }
 
-  private MediaCodecInfo(String name, String mimeType, CodecCapabilities capabilities,
-      boolean forceDisableAdaptive, boolean forceSecure) {
+  private MediaCodecInfo(
+      String name,
+      @Nullable String mimeType,
+      @Nullable CodecCapabilities capabilities,
+      boolean passthrough,
+      boolean forceDisableAdaptive,
+      boolean forceSecure) {
     this.name = Assertions.checkNotNull(name);
     this.mimeType = mimeType;
     this.capabilities = capabilities;
+    this.passthrough = passthrough;
     adaptive = !forceDisableAdaptive && capabilities != null && isAdaptive(capabilities);
     tunneling = capabilities != null && isTunneling(capabilities);
     secure = forceSecure || (capabilities != null && isSecure(capabilities));
@@ -128,6 +168,19 @@ public final class MediaCodecInfo {
   public CodecProfileLevel[] getProfileLevels() {
     return capabilities == null || capabilities.profileLevels == null ? new CodecProfileLevel[0]
         : capabilities.profileLevels;
+  }
+
+  /**
+   * Returns an upper bound on the maximum number of supported instances, or {@link
+   * #MAX_SUPPORTED_INSTANCES_UNKNOWN} if unknown. Applications should not expect to operate more
+   * instances than the returned maximum.
+   *
+   * @see CodecCapabilities#getMaxSupportedInstances()
+   */
+  public int getMaxSupportedInstances() {
+    return (Util.SDK_INT < 23 || capabilities == null)
+        ? MAX_SUPPORTED_INSTANCES_UNKNOWN
+        : getMaxSupportedInstancesV23(capabilities);
   }
 
   /**
@@ -154,6 +207,11 @@ public final class MediaCodecInfo {
       // If we don't know any better, we assume that the profile and level are supported.
       return true;
     }
+    // AMZN_CHANGE_BEGIN
+    if (AmazonQuirks.shouldSkipProfileLevelCheck()) {
+      return true;
+    }
+    // AMZN_CHANGE_END
     for (CodecProfileLevel capabilities : getProfileLevels()) {
       if (capabilities.profile == codecProfileAndLevel.first
           && capabilities.level >= codecProfileAndLevel.second) {
@@ -362,4 +420,8 @@ public final class MediaCodecInfo {
         : capabilities.areSizeAndRateSupported(width, height, frameRate);
   }
 
+  @TargetApi(23)
+  private static int getMaxSupportedInstancesV23(CodecCapabilities capabilities) {
+    return capabilities.getMaxSupportedInstances();
+  }
 }

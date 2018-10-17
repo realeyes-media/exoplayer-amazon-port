@@ -18,14 +18,18 @@ package com.google.android.exoplayer2.util;
 import android.Manifest.permission;
 import android.annotation.TargetApi;
 import android.app.Activity;
+import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.graphics.Point;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Parcel;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.Display;
@@ -128,6 +132,22 @@ public final class Util {
   }
 
   /**
+   * Calls {@link Context#startForegroundService(Intent)} if {@link #SDK_INT} is 26 or higher, or
+   * {@link Context#startService(Intent)} otherwise.
+   *
+   * @param context The context to call.
+   * @param intent The intent to pass to the called method.
+   * @return The result of the called method.
+   */
+  public static ComponentName startForegroundService(Context context, Intent intent) {
+    if (Util.SDK_INT >= 26) {
+      return context.startForegroundService(intent);
+    } else {
+      return context.startService(intent);
+    }
+  }
+
+  /**
    * Checks whether it's necessary to request the {@link permission#READ_EXTERNAL_STORAGE}
    * permission read the specified {@link Uri}s, requesting the permission if necessary.
    *
@@ -160,7 +180,7 @@ public final class Util {
    */
   public static boolean isLocalFileUri(Uri uri) {
     String scheme = uri.getScheme();
-    return TextUtils.isEmpty(scheme) || scheme.equals("file");
+    return TextUtils.isEmpty(scheme) || "file".equals(scheme);
   }
 
   /**
@@ -171,7 +191,7 @@ public final class Util {
    * @param o2 The second object.
    * @return {@code o1 == null ? o2 == null : o1.equals(o2)}.
    */
-  public static boolean areEqual(Object o1, Object o2) {
+  public static boolean areEqual(@Nullable Object o1, @Nullable Object o2) {
     return o1 == null ? o2 == null : o1.equals(o2);
   }
 
@@ -203,6 +223,20 @@ public final class Util {
    */
   public static <T> void removeRange(List<T> list, int fromIndex, int toIndex) {
     list.subList(fromIndex, toIndex).clear();
+  }
+
+  /**
+   * Copies and optionally truncates an array. Prevents null array elements created by {@link
+   * Arrays#copyOf(Object[], int)} by ensuring the new length does not exceed the current length.
+   *
+   * @param input The input array.
+   * @param length The output array length. Must be less or equal to the length of the input array.
+   * @return The copied array.
+   */
+  @SuppressWarnings("nullness:assignment.type.incompatible")
+  public static <T> T[] nullSafeArrayCopy(T[] input, int length) {
+    Assertions.checkArgument(length <= input.length);
+    return Arrays.copyOf(input, length);
   }
 
   /**
@@ -252,13 +286,35 @@ public final class Util {
   }
 
   /**
+   * Reads an integer from a {@link Parcel} and interprets it as a boolean, with 0 mapping to false
+   * and all other values mapping to true.
+   *
+   * @param parcel The {@link Parcel} to read from.
+   * @return The read value.
+   */
+  public static boolean readBoolean(Parcel parcel) {
+    return parcel.readInt() != 0;
+  }
+
+  /**
+   * Writes a boolean to a {@link Parcel}. The boolean is written as an integer with value 1 (true)
+   * or 0 (false).
+   *
+   * @param parcel The {@link Parcel} to write to.
+   * @param value The value to write.
+   */
+  public static void writeBoolean(Parcel parcel, boolean value) {
+    parcel.writeInt(value ? 1 : 0);
+  }
+
+  /**
    * Returns a normalized RFC 639-2/T code for {@code language}.
    *
    * @param language A case-insensitive ISO 639 alpha-2 or alpha-3 language code.
-   * @return The all-lowercase normalized code, or null if the input was null, or
-   *     {@code language.toLowerCase()} if the language could not be normalized.
+   * @return The all-lowercase normalized code, or null if the input was null, or {@code
+   *     language.toLowerCase()} if the language could not be normalized.
    */
-  public static String normalizeLanguageCode(String language) {
+  public static @Nullable String normalizeLanguageCode(@Nullable String language) {
     try {
       return language == null ? null : new Locale(language).getISO3Language();
     } catch (MissingResourceException e) {
@@ -277,6 +333,18 @@ public final class Util {
   }
 
   /**
+   * Returns a new {@link String} constructed by decoding UTF-8 encoded bytes in a subarray.
+   *
+   * @param bytes The UTF-8 encoded bytes to decode.
+   * @param offset The index of the first byte to decode.
+   * @param length The number of bytes to decode.
+   * @return The string.
+   */
+  public static String fromUtf8Bytes(byte[] bytes, int offset, int length) {
+    return new String(bytes, offset, length, Charset.forName(C.UTF8_NAME));
+  }
+
+  /**
    * Returns a new byte array containing the code points of a {@link String} encoded using UTF-8.
    *
    * @param value The {@link String} whose bytes should be obtained.
@@ -284,6 +352,33 @@ public final class Util {
    */
   public static byte[] getUtf8Bytes(String value) {
     return value.getBytes(Charset.forName(C.UTF8_NAME));
+  }
+
+  /**
+   * Splits a string using {@code value.split(regex, -1}). Note: this is is similar to {@link
+   * String#split(String)} but empty matches at the end of the string will not be omitted from the
+   * returned array.
+   *
+   * @param value The string to split.
+   * @param regex A delimiting regular expression.
+   * @return The array of strings resulting from splitting the string.
+   */
+  public static String[] split(String value, String regex) {
+    return value.split(regex, /* limit= */ -1);
+  }
+
+  /**
+   * Splits the string at the first occurrence of the delimiter {@code regex}. If the delimiter does
+   * not match, returns an array with one element which is the input string. If the delimiter does
+   * match, returns an array with the portion of the string before the delimiter and the rest of the
+   * string.
+   *
+   * @param value The string.
+   * @param regex A delimiting regular expression.
+   * @return The string split by the first occurrence of the delimiter.
+   */
+  public static String[] splitAtFirst(String value, String regex) {
+    return value.split(regex, /* limit= */ 2);
   }
 
   /**
@@ -314,6 +409,15 @@ public final class Util {
    */
   public static String toUpperInvariant(String text) {
     return text == null ? null : text.toUpperCase(Locale.US);
+  }
+
+  /**
+   * Formats a string using {@link Locale#US}.
+   *
+   * @see String#format(String, Object...)
+   */
+  public static String formatInvariant(String format, Object... args) {
+    return String.format(Locale.US, format, args);
   }
 
   /**
@@ -639,7 +743,7 @@ public final class Util {
     } else {
       timezoneShift = ((Integer.parseInt(matcher.group(12)) * 60
           + Integer.parseInt(matcher.group(13))));
-      if (matcher.group(11).equals("-")) {
+      if ("-".equals(matcher.group(11))) {
         timezoneShift *= -1;
       }
     }
@@ -913,7 +1017,7 @@ public final class Util {
     if (TextUtils.isEmpty(codecs)) {
       return null;
     }
-    String[] codecArray = codecs.trim().split("(\\s*,\\s*)");
+    String[] codecArray = split(codecs.trim(), "(\\s*,\\s*)");
     StringBuilder builder = new StringBuilder();
     for (String codec : codecArray) {
       if (trackType == MimeTypes.getTrackTypeOfCodec(codec)) {
@@ -949,6 +1053,20 @@ public final class Util {
       default:
         return C.ENCODING_INVALID;
     }
+  }
+
+  /**
+   * Returns whether {@code encoding} is one of the PCM encodings.
+   *
+   * @param encoding The encoding of the audio data.
+   * @return Whether the encoding is one of the PCM encodings.
+   */
+  public static boolean isEncodingPcm(@C.Encoding int encoding) {
+    return encoding == C.ENCODING_PCM_8BIT
+        || encoding == C.ENCODING_PCM_16BIT
+        || encoding == C.ENCODING_PCM_24BIT
+        || encoding == C.ENCODING_PCM_32BIT
+        || encoding == C.ENCODING_PCM_FLOAT;
   }
 
   /**
@@ -1087,6 +1205,20 @@ public final class Util {
           return null;
         }
     }
+  }
+
+  /**
+   * Makes a best guess to infer the type from a {@link Uri}.
+   *
+   * @param uri The {@link Uri}.
+   * @param overrideExtension If not null, used to infer the type.
+   * @return The content type.
+   */
+  @C.ContentType
+  public static int inferContentType(Uri uri, String overrideExtension) {
+    return TextUtils.isEmpty(overrideExtension)
+        ? inferContentType(uri)
+        : inferContentType("." + overrideExtension);
   }
 
   /**
@@ -1361,7 +1493,7 @@ public final class Util {
         // If we managed to read sys.display-size, attempt to parse it.
         if (!TextUtils.isEmpty(sysDisplaySize)) {
           try {
-            String[] sysDisplaySizeParts = sysDisplaySize.trim().split("x");
+            String[] sysDisplaySizeParts = split(sysDisplaySize.trim(), "x");
             if (sysDisplaySizeParts.length == 2) {
               int width = Integer.parseInt(sysDisplaySizeParts[0]);
               int height = Integer.parseInt(sysDisplaySizeParts[1]);

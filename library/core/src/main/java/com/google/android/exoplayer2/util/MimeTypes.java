@@ -18,6 +18,7 @@ package com.google.android.exoplayer2.util;
 import android.support.annotation.Nullable;
 import android.text.TextUtils;
 import com.google.android.exoplayer2.C;
+import java.util.ArrayList;
 
 /**
  * Defines common MIME types and helper methods.
@@ -54,6 +55,7 @@ public final class MimeTypes {
   public static final String AUDIO_AC3 = BASE_TYPE_AUDIO + "/ac3";
   public static final String AUDIO_E_AC3 = BASE_TYPE_AUDIO + "/eac3";
   public static final String AUDIO_ATMOS = BASE_TYPE_AUDIO + "/eac3-joc";
+  public static final String AUDIO_CUSTOM_EC3 = BASE_TYPE_AUDIO + "/ec3";
   public static final String AUDIO_CUSTOM_EC3 = BASE_TYPE_AUDIO + "/ec3";
   public static final String AUDIO_TRUEHD = BASE_TYPE_AUDIO + "/true-hd";
   public static final String AUDIO_DTS = BASE_TYPE_AUDIO + "/vnd.dts";
@@ -93,7 +95,29 @@ public final class MimeTypes {
   public static final String APPLICATION_DVBSUBS = BASE_TYPE_APPLICATION + "/dvbsubs";
   public static final String APPLICATION_EXIF = BASE_TYPE_APPLICATION + "/x-exif";
 
-  private MimeTypes() {}
+  private static final ArrayList<CustomMimeType> customMimeTypes = new ArrayList<>();
+
+  /**
+   * Registers a custom MIME type. Most applications do not need to call this method, as handling of
+   * standard MIME types is built in. These built-in MIME types take precedence over any registered
+   * via this method. If this method is used, it must be called before creating any player(s).
+   *
+   * @param mimeType The custom MIME type to register.
+   * @param codecPrefix The RFC 6381-style codec string prefix associated with the MIME type.
+   * @param trackType The {@link C}{@code .TRACK_TYPE_*} constant associated with the MIME type.
+   *     This value is ignored if the top-level type of {@code mimeType} is audio, video or text.
+   */
+  public static void registerCustomMimeType(String mimeType, String codecPrefix, int trackType) {
+    CustomMimeType customMimeType = new CustomMimeType(mimeType, codecPrefix, trackType);
+    int customMimeTypeCount = customMimeTypes.size();
+    for (int i = 0; i < customMimeTypeCount; i++) {
+      if (mimeType.equals(customMimeTypes.get(i).mimeType)) {
+        customMimeTypes.remove(i);
+        break;
+      }
+    }
+    customMimeTypes.add(customMimeType);
+  }
 
   /**
    * Whether the top-level type of {@code mimeType} is audio.
@@ -135,18 +159,17 @@ public final class MimeTypes {
     return BASE_TYPE_APPLICATION.equals(getTopLevelType(mimeType));
   }
 
-
   /**
    * Derives a video sample mimeType from a codecs attribute.
    *
    * @param codecs The codecs attribute.
    * @return The derived video mimeType, or null if it could not be derived.
    */
-  public static String getVideoMediaMimeType(String codecs) {
+  public static @Nullable String getVideoMediaMimeType(@Nullable String codecs) {
     if (codecs == null) {
       return null;
     }
-    String[] codecList = codecs.split(",");
+    String[] codecList = Util.split(codecs, ",");
     for (String codec : codecList) {
       String mimeType = getMediaMimeType(codec);
       if (mimeType != null && isVideo(mimeType)) {
@@ -162,11 +185,11 @@ public final class MimeTypes {
    * @param codecs The codecs attribute.
    * @return The derived audio mimeType, or null if it could not be derived.
    */
-  public static String getAudioMediaMimeType(String codecs) {
+  public static @Nullable String getAudioMediaMimeType(@Nullable String codecs) {
     if (codecs == null) {
       return null;
     }
-    String[] codecList = codecs.split(",");
+    String[] codecList = Util.split(codecs, ",");
     for (String codec : codecList) {
       String mimeType = getMediaMimeType(codec);
       if (mimeType != null && isAudio(mimeType)) {
@@ -182,7 +205,7 @@ public final class MimeTypes {
    * @param codec The codec identifier to derive.
    * @return The mimeType, or null if it could not be derived.
    */
-  public static String getMediaMimeType(String codec) {
+  public static @Nullable String getMediaMimeType(@Nullable String codec) {
     if (codec == null) {
       return null;
     }
@@ -224,8 +247,9 @@ public final class MimeTypes {
       return MimeTypes.AUDIO_OPUS;
     } else if (codec.startsWith("vorbis")) {
       return MimeTypes.AUDIO_VORBIS;
+    } else {
+      return getCustomMimeTypeForCodec(codec);
     }
-    return null;
   }
 
   /**
@@ -238,18 +262,28 @@ public final class MimeTypes {
   @Nullable
   public static String getMimeTypeFromMp4ObjectType(int objectType) {
     switch (objectType) {
-      case 0x60:
-      case 0x61:
-        return MimeTypes.VIDEO_MPEG2;
       case 0x20:
         return MimeTypes.VIDEO_MP4V;
       case 0x21:
         return MimeTypes.VIDEO_H264;
       case 0x23:
         return MimeTypes.VIDEO_H265;
+      case 0x60:
+      case 0x61:
+      case 0x62:
+      case 0x63:
+      case 0x64:
+      case 0x65:
+        return MimeTypes.VIDEO_MPEG2;
+      case 0x6A:
+        return MimeTypes.VIDEO_MPEG;
       case 0x69:
       case 0x6B:
         return MimeTypes.AUDIO_MPEG;
+      case 0xA3:
+        return MimeTypes.VIDEO_VC1;
+      case 0xB1:
+        return MimeTypes.VIDEO_VP9;
       case 0x40:
       case 0x66:
       case 0x67:
@@ -300,7 +334,7 @@ public final class MimeTypes {
         || APPLICATION_CAMERA_MOTION.equals(mimeType)) {
       return C.TRACK_TYPE_METADATA;
     } else {
-      return C.TRACK_TYPE_UNKNOWN;
+      return getTrackTypeForCustomMimeType(mimeType);
     }
   }
 
@@ -351,7 +385,7 @@ public final class MimeTypes {
    * @param mimeType The mimeType whose top-level type is required.
    * @return The top-level type, or null if the mimeType is null.
    */
-  private static String getTopLevelType(String mimeType) {
+  private static @Nullable String getTopLevelType(@Nullable String mimeType) {
     if (mimeType == null) {
       return null;
     }
@@ -362,4 +396,41 @@ public final class MimeTypes {
     return mimeType.substring(0, indexOfSlash);
   }
 
+  private static @Nullable String getCustomMimeTypeForCodec(String codec) {
+    int customMimeTypeCount = customMimeTypes.size();
+    for (int i = 0; i < customMimeTypeCount; i++) {
+      CustomMimeType customMimeType = customMimeTypes.get(i);
+      if (codec.startsWith(customMimeType.codecPrefix)) {
+        return customMimeType.mimeType;
+      }
+    }
+    return null;
+  }
+
+  private static int getTrackTypeForCustomMimeType(String mimeType) {
+    int customMimeTypeCount = customMimeTypes.size();
+    for (int i = 0; i < customMimeTypeCount; i++) {
+      CustomMimeType customMimeType = customMimeTypes.get(i);
+      if (mimeType.equals(customMimeType.mimeType)) {
+        return customMimeType.trackType;
+      }
+    }
+    return C.TRACK_TYPE_UNKNOWN;
+  }
+
+  private MimeTypes() {
+    // Prevent instantiation.
+  }
+
+  private static final class CustomMimeType {
+    public final String mimeType;
+    public final String codecPrefix;
+    public final int trackType;
+
+    public CustomMimeType(String mimeType, String codecPrefix, int trackType) {
+      this.mimeType = mimeType;
+      this.codecPrefix = codecPrefix;
+      this.trackType = trackType;
+    }
+  }
 }

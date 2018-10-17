@@ -16,7 +16,6 @@
 package com.google.android.exoplayer2.util;
 
 import android.os.Build;
-import android.text.TextUtils;
 import android.util.Log;
 
 public final class AmazonQuirks {
@@ -30,15 +29,11 @@ public final class AmazonQuirks {
     private static final String KINDLE_TABLET_DEVICE_MODEL     = "KF";
     private static final String FIRE_PHONE_DEVICE_MODEL        = "SD";
     private static final String AMAZON                         = "Amazon";
-    private static final String SOHO_DEVICE_MODEL              = "KFSOWI";
 
     private static final String DEVICEMODEL  = Build.MODEL;
     private static final String MANUFACTURER = Build.MANUFACTURER;
 
     private static final int AUDIO_HARDWARE_LATENCY_FOR_TABLETS = 90000;
-    // Fire TV Gen2 device has a limitation of max input size for secure AVC content
-    // capped at 2.8 MB
-    private static final int MAX_INPUT_SECURE_AVC_SIZE_FIRETV_GEN2 = (int) (2.8 * 1024 * 1024);
 
     //caching
     private static final boolean isAmazonDevice;
@@ -47,9 +42,9 @@ public final class AmazonQuirks {
     private static final boolean isFireTVGen2;
     private static final boolean isKindleTablet;
     private static final boolean isFirePhone;
-    private static final boolean isSOHOKindleTablet;
 
     private static boolean isSnappingToVsyncDisabled;
+    private static boolean skipProfileLevelCheck;
 
     // This static block must be the last
     //INIT ORDERING IS IMPORTANT IN THIS BLOCK!
@@ -60,8 +55,8 @@ public final class AmazonQuirks {
         isFireTVStick  = isAmazonDevice && DEVICEMODEL.equalsIgnoreCase(FIRETV_STICK_DEVICE_MODEL);
         isKindleTablet = isAmazonDevice && DEVICEMODEL.startsWith(KINDLE_TABLET_DEVICE_MODEL);
         isFirePhone = isAmazonDevice && DEVICEMODEL.startsWith(FIRE_PHONE_DEVICE_MODEL);
-        isSOHOKindleTablet = isAmazonDevice && DEVICEMODEL.equalsIgnoreCase(SOHO_DEVICE_MODEL);
         isSnappingToVsyncDisabled = false;
+        loadForcedLogSettings();
     }
 
     private AmazonQuirks(){}
@@ -109,29 +104,6 @@ public final class AmazonQuirks {
         // SDK version and device type again
         return AUDIO_HARDWARE_LATENCY_FOR_TABLETS;
     }
-
-    public static boolean shouldExtractPlayReadyHeader() {
-        return isFireTVGen1Family() || isFireTVGen2();
-    }
-
-    /* In Fire TV Gen1 family of devices, there is a platform limitation that
-    * codec cannot be initialized with a crypto object before the DRM keys are
-    * provided to MediaDRM - the media codec either skips processing or
-    * throws error on processing the CSD provided in clear as part of the
-    * media format object passed in configure API.
-    * Hence, we wait for the DRM keys to be acquired before initializing the codec.
-    */
-    public static boolean waitForDRMKeysBeforeInitCodec() {
-        return isFireTVGen1Family();
-    }
-
-    public static boolean codecNeedsEosPropagationWorkaround(String codecName) {
-        boolean needsWorkaround = isFireTVGen2() && codecName.endsWith(".secure");
-        if (needsWorkaround) {
-            Log.i(TAG, "Codec Needs EOS Propagation Workaround " + codecName);
-        }
-        return needsWorkaround;
-    }
     /**
       * Updates log level based on a local system property of the device. This can be very useful
       * to enable logging in scenarios when a 3P developer has issues we need to assist
@@ -174,20 +146,6 @@ public final class AmazonQuirks {
              return null;
          }
      }
-    public static boolean isMaxInputSizeSupported(String codecName, int inputSize) {
-       boolean isSizeSupported = true;
-       if (isFireTVGen2) {
-           isSizeSupported = TextUtils.isEmpty(codecName) || !codecName.endsWith("AVC.secure") ||
-               inputSize <= MAX_INPUT_SECURE_AVC_SIZE_FIRETV_GEN2;
-       } else if(isSOHOKindleTablet) {
-            // Avoid changing default input buffer size for video decoder because otherwise,
-            // it crashes. We don't know the max limit of this legacy platform.
-            isSizeSupported = TextUtils.isEmpty(codecName)
-                    || !codecName.equalsIgnoreCase("OMX.TI.DUCATI1.VIDEO.DECODER");
-        }
-       return isSizeSupported;
-    }
-
     /*
      * To disable snapping the frame release times to VSYNC call this function with true
      * By default, snapping to VSYNC is enabled if this function is not called.
@@ -200,4 +158,10 @@ public final class AmazonQuirks {
          return isSnappingToVsyncDisabled;
     }
 
+    public static void skipProfileLevelCheck(boolean skip) {
+        skipProfileLevelCheck = skip;
+    }
+    public static boolean shouldSkipProfileLevelCheck() {
+        return skipProfileLevelCheck;
+    }
 }

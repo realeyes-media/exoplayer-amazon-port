@@ -15,6 +15,7 @@
  */
 package com.google.android.exoplayer2.source.chunk;
 
+import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.Format;
 import com.google.android.exoplayer2.extractor.DefaultExtractorInput;
 import com.google.android.exoplayer2.extractor.Extractor;
@@ -46,7 +47,9 @@ public class ContainerMediaChunk extends BaseMediaChunk {
    * @param trackSelectionData See {@link #trackSelectionData}.
    * @param startTimeUs The start time of the media contained by the chunk, in microseconds.
    * @param endTimeUs The end time of the media contained by the chunk, in microseconds.
-   * @param chunkIndex The index of the chunk.
+   * @param seekTimeUs The media time from which output will begin, or {@link C#TIME_UNSET} if the
+   *     whole chunk should be output.
+   * @param chunkIndex The index of the chunk, or {@link C#INDEX_UNSET} if it is not known.
    * @param chunkCount The number of chunks in the underlying media that are spanned by this
    *     instance. Normally equal to one, but may be larger if multiple chunks as defined by the
    *     underlying media are being merged into a single load.
@@ -61,12 +64,21 @@ public class ContainerMediaChunk extends BaseMediaChunk {
       Object trackSelectionData,
       long startTimeUs,
       long endTimeUs,
+      long seekTimeUs,
       long chunkIndex,
       int chunkCount,
       long sampleOffsetUs,
       ChunkExtractorWrapper extractorWrapper) {
-    super(dataSource, dataSpec, trackFormat, trackSelectionReason, trackSelectionData, startTimeUs,
-        endTimeUs, chunkIndex);
+    super(
+        dataSource,
+        dataSpec,
+        trackFormat,
+        trackSelectionReason,
+        trackSelectionData,
+        startTimeUs,
+        endTimeUs,
+        seekTimeUs,
+        chunkIndex);
     this.chunkCount = chunkCount;
     this.sampleOffsetUs = sampleOffsetUs;
     this.extractorWrapper = extractorWrapper;
@@ -94,11 +106,6 @@ public class ContainerMediaChunk extends BaseMediaChunk {
     loadCanceled = true;
   }
 
-  @Override
-  public final boolean isLoadCanceled() {
-    return loadCanceled;
-  }
-
   @SuppressWarnings("NonAtomicVolatileUpdate")
   @Override
   public final void load() throws IOException, InterruptedException {
@@ -111,7 +118,8 @@ public class ContainerMediaChunk extends BaseMediaChunk {
         // Configure the output and set it as the target for the extractor wrapper.
         BaseMediaChunkOutput output = getOutput();
         output.setSampleOffsetUs(sampleOffsetUs);
-        extractorWrapper.init(output);
+        extractorWrapper.init(
+            output, seekTimeUs == C.TIME_UNSET ? 0 : (seekTimeUs - sampleOffsetUs));
       }
       // Load and decode the sample data.
       try {

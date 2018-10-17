@@ -90,7 +90,7 @@ import java.util.Arrays;
   private final Runnable onContinueLoadingRequestedRunnable;
   private final Handler handler;
 
-  private Callback callback;
+  private @Nullable Callback callback;
   private SeekMap seekMap;
   private SampleQueue[] sampleQueues;
   private int[] sampleQueueTrackIds;
@@ -100,6 +100,7 @@ import java.util.Arrays;
 
   private boolean seenFirstTrackSelection;
   private boolean notifyDiscontinuity;
+  private boolean notifiedReadingStarted;
   private int enabledTrackCount;
   private TrackGroupArray tracks;
   private long durationUs;
@@ -176,6 +177,7 @@ import java.util.Arrays;
         minLoadableRetryCount == ExtractorMediaSource.MIN_RETRY_COUNT_DEFAULT_FOR_MEDIA
         ? ExtractorMediaSource.DEFAULT_MIN_LOADABLE_RETRY_COUNT_ON_DEMAND
         : minLoadableRetryCount;
+    eventDispatcher.mediaPeriodCreated();
   }
 
   public void release() {
@@ -188,7 +190,9 @@ import java.util.Arrays;
     }
     loader.release(this);
     handler.removeCallbacksAndMessages(null);
+    callback = null;
     released = true;
+    eventDispatcher.mediaPeriodReleased();
   }
 
   @Override
@@ -319,6 +323,10 @@ import java.util.Arrays;
 
   @Override
   public long readDiscontinuity() {
+    if (!notifiedReadingStarted) {
+      eventDispatcher.readingStarted();
+      notifiedReadingStarted = true;
+    }
     if (notifyDiscontinuity
         && (loadingFinished || getExtractedSamplesCount() > extractedSamplesCountAtStartOfLoad)) {
       notifyDiscontinuity = false;
@@ -524,8 +532,8 @@ import java.util.Arrays;
   }
 
   @Override
-  public int onLoadError(ExtractingLoadable loadable, long elapsedRealtimeMs,
-      long loadDurationMs, IOException error) {
+  public @Loader.RetryAction int onLoadError(
+      ExtractingLoadable loadable, long elapsedRealtimeMs, long loadDurationMs, IOException error) {
     boolean isErrorFatal = isLoadableExceptionFatal(error);
     eventDispatcher.loadError(
         loadable.dataSpec,
@@ -823,11 +831,6 @@ import java.util.Arrays;
     @Override
     public void cancelLoad() {
       loadCanceled = true;
-    }
-
-    @Override
-    public boolean isLoadCanceled() {
-      return loadCanceled;
     }
 
     @Override
