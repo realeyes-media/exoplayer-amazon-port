@@ -158,7 +158,24 @@ public abstract class BaseTrackSelection implements TrackSelection {
       canBlacklist = i != index && !isBlacklisted(i, nowMs);
     }
     if (!canBlacklist) {
-      return false;
+      if (length == 1) {
+        return false;
+      }
+  
+      //The last available track was blacklisted.
+      //  Unblacklist the earliest blacklisted track
+  
+      long earliestBlacklistedTime = 0;
+      int earliestBlacklistedIndex = 0;
+      for (int j=0; j < length; j++) {
+        if (earliestBlacklistedTime == 0 || blacklistUntilTimes[j] < earliestBlacklistedTime) {
+          earliestBlacklistedTime = blacklistUntilTimes[j];
+          earliestBlacklistedIndex = j;
+        }
+      }
+  
+      blacklistUntilTimes[earliestBlacklistedIndex] = 0;
+  
     }
     blacklistUntilTimes[index] = Math.max(blacklistUntilTimes[index], nowMs + blacklistDurationMs);
     return true;
